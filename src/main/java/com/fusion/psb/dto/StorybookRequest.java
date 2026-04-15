@@ -11,6 +11,7 @@ public class StorybookRequest {
   private String mood;
   private String companion;
   private String moralAttributes;
+  private String language;
 
   // Getters and setters
   public String getName() {
@@ -91,5 +92,13 @@ public class StorybookRequest {
 
   public void setMoralAttributes(String moralAttributes) {
     this.moralAttributes = moralAttributes;
+  }
+
+  public String getLanguage() {
+    return language;
+  }
+
+  public void setLanguage(String language) {
+    this.language = language;
   }
 }

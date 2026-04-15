@@ -21,6 +21,13 @@ public class StorybookAuditLog {
     private String mood;
     private String companion;
     private String moralAttributes;
+    private String language;
+
+    @Column(columnDefinition = "TEXT")
+    private String systemPrompt;
+
+    @Column(columnDefinition = "TEXT")
+    private String userPrompt;
 
     @Column(columnDefinition = "TEXT")
     private String aiResponse;
@@ -63,6 +70,15 @@ public class StorybookAuditLog {
 
     public String getMoralAttributes() { return moralAttributes; }
     public void setMoralAttributes(String moralAttributes) { this.moralAttributes = moralAttributes; }
+
+    public String getLanguage() { return language; }
+    public void setLanguage(String language) { this.language = language; }
+
+    public String getSystemPrompt() { return systemPrompt; }
+    public void setSystemPrompt(String systemPrompt) { this.systemPrompt = systemPrompt; }
+
+    public String getUserPrompt() { return userPrompt; }
+    public void setUserPrompt(String userPrompt) { this.userPrompt = userPrompt; }
 
     public String getAiResponse() { return aiResponse; }
     public void setAiResponse(String aiResponse) { this.aiResponse = aiResponse; }
