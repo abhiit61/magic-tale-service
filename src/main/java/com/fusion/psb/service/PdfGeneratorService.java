@@ -13,6 +13,7 @@ import com.itextpdf.text.pdf.draw.LineSeparator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -33,6 +34,9 @@ public class PdfGeneratorService {
       Pattern.compile("^\\*\\*\\(Page \\d+:\\s*Illustration\\s*-\\s*(.+)\\)\\*\\*$", Pattern.CASE_INSENSITIVE);
 
   private final ImageGenerationService imageGenerationService;
+
+  @Value("${generate.pdf.image.enable}")
+  private boolean enableImage;
 
   @Autowired
   public PdfGeneratorService(ImageGenerationService imageGenerationService) {
@@ -92,26 +96,32 @@ public class PdfGeneratorService {
 
         // "---" = page boundary marker
         if (trimmed.matches("[-*_]{3,}")) {
-          if (!firstHrSeen) {
-            // First separator: just marks end of cover section
-            firstHrSeen = true;
-            document.add(new LineSeparator(0.5f, 100f, BaseColor.GRAY, Element.ALIGN_CENTER, -2f));
-            document.add(Chunk.NEWLINE);
-          } else {
-            // Subsequent separators: begin a new story page
-            needNewPage = true;
-          }
+//          if (!firstHrSeen) {
+//            firstHrSeen = true;
+//            document.add(new LineSeparator(0noe .5f, 100f, BaseColor.GRAY, Element.ALIGN_CENTER, -2f));
+//            document.add(Chunk.NEWLINE);
+//          } else {
+//            needNewPage = true;
+//          }
+          needNewPage = true;
           continue;
         }
 
-        // Check for illustration/image marker
+        // Always detect image marker lines so they are never rendered as raw text.
         String imageDesc = extractImageDescription(trimmed);
         if (imageDesc != null) {
           if (needNewPage) {
             document.newPage();
             needNewPage = false;
           }
-          addStorybookImage(document, imageDesc);
+          if (enableImage) {
+            addStorybookImage(document, imageDesc);
+          } else {
+            // Show description as italic caption so no blank space is left
+            Paragraph descPara = buildStyledParagraph("[ " + imageDesc + " ]", italicFont, italicFont, italicFont, italicFont);
+            descPara.setSpacingAfter(4);
+            document.add(descPara);
+          }
           continue;
         }
 

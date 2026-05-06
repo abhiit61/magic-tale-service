@@ -53,6 +53,8 @@ public class StorybookService {
       String cachedContent = cached.get().getAiResponse()
           .replace(cached.get().getName(), request.getName());
       return pdfGeneratorService.createPDF(request.getName(), cachedContent, language);
+    } else {
+      LOGGER.info("Cache missed");
     }
 
     // No cache hit — call AI
