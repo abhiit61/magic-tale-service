@@ -34,6 +34,9 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                 existing.setName(name);
                 existing.setPicture(picture);
                 existing.setLastLogin(LocalDateTime.now());
+                if("abhiit61@gmail.com".equalsIgnoreCase(email)) {
+                    existing.setRole(Role.ADMIN);
+                }
                 userRepository.save(existing);
             },
             () -> {
@@ -45,6 +48,9 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                 newUser.setRole(Role.USER);
                 newUser.setCreatedAt(LocalDateTime.now());
                 newUser.setLastLogin(LocalDateTime.now());
+                if("abhiit61@gmail.com".equalsIgnoreCase(email)) {
+                    newUser.setRole(Role.ADMIN);
+                }
                 userRepository.save(newUser);
             }
         );
