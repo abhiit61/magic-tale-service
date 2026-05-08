@@ -4,6 +4,7 @@ import com.fusion.psb.entity.Role;
 import com.fusion.psb.entity.User;
 import com.fusion.psb.repository.UserRepository;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -28,12 +29,14 @@ public class UserService {
     }
 
     public User deactivateUser(Long id) {
+        rejectIfSelf(id, "You cannot deactivate your own account");
         User user = getUserById(id);
         user.setActive(false);
         return userRepository.save(user);
     }
 
     public User updateRole(Long id, String roleStr) {
+        rejectIfSelf(id, "You cannot change your own role");
         Role role;
         try {
             role = Role.valueOf(roleStr.toUpperCase());
@@ -43,5 +46,12 @@ public class UserService {
         User user = getUserById(id);
         user.setRole(role);
         return userRepository.save(user);
+    }
+
+    private void rejectIfSelf(Long targetId, String message) {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (principal instanceof User currentUser && currentUser.getId().equals(targetId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, message);
+        }
     }
 }
