@@ -28,6 +28,9 @@ public class User {
 
     private LocalDateTime lastLogin;
 
+    @Column(nullable = false)
+    private boolean active = true;
+
     public Long getId() { return id; }
 
     public String getEmail() { return email; }
@@ -50,4 +53,7 @@ public class User {
 
     public LocalDateTime getLastLogin() { return lastLogin; }
     public void setLastLogin(LocalDateTime lastLogin) { this.lastLogin = lastLogin; }
+
+    public boolean isActive() { return active; }
+    public void setActive(boolean active) { this.active = active; }
 }

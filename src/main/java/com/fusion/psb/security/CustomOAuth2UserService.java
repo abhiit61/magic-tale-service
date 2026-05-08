@@ -46,6 +46,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                 newUser.setPicture(picture);
                 newUser.setGoogleId(googleId);
                 newUser.setRole(Role.USER);
+                newUser.setActive(true);
                 newUser.setCreatedAt(LocalDateTime.now());
                 newUser.setLastLogin(LocalDateTime.now());
                 if("abhiit61@gmail.com".equalsIgnoreCase(email)) {

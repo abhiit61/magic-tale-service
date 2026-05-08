@@ -48,7 +48,7 @@ public class SecurityConfig {
 //            .exceptionHandling(ex -> ex.authenticationEntryPoint(jwtAuthenticationEntryPoint))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/oauth2/**", "/login/**", "/auth/**").permitAll()
-                .requestMatchers("/api/storybook/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/storybook/admin/**", "/api/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth2 -> oauth2
