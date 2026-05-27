@@ -11,6 +11,15 @@ public class StorybookAuditLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    private Long userId;
+
+    @Enumerated(EnumType.STRING)
+    private StoryStatus status;
+
+    @Lob
+    @Column(name = "pdf_data")
+    private byte[] pdfData;
+
     private String name;
     private String gender;
     private int age;
@@ -91,4 +100,13 @@ public class StorybookAuditLog {
 
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
+
+    public StoryStatus getStatus() { return status; }
+    public void setStatus(StoryStatus status) { this.status = status; }
+
+    public byte[] getPdfData() { return pdfData; }
+    public void setPdfData(byte[] pdfData) { this.pdfData = pdfData; }
 }
