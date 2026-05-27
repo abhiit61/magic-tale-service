@@ -81,47 +81,42 @@ public class PdfGeneratorService {
       document.add(new LineSeparator(1f, 100f, BaseColor.BLACK, Element.ALIGN_CENTER, -2f));
       document.add(Chunk.NEWLINE);
 
-      // Parse content: split on lines, track page boundaries via "---"
-      // First "---" = end of header/cover; each subsequent "---" = new story page
-      boolean firstHrSeen = false;
+      // Parse content line-by-line.
+      // pendingNewlines buffers blank lines so they are only flushed when real content follows.
+      // This prevents white gaps when an image marker is skipped (disabled or generation failed).
       boolean needNewPage = false;
+      int pendingNewlines = 0;
+      boolean imageSkipped = false;
 
       for (String line : content.split("\n")) {
         String trimmed = line.trim();
 
         if (trimmed.isEmpty()) {
-          document.add(Chunk.NEWLINE);
+          // Swallow empty lines that immediately follow a skipped image marker
+          if (!imageSkipped) pendingNewlines++;
           continue;
         }
 
+        imageSkipped = false;
+
         // "---" = page boundary marker
         if (trimmed.matches("[-*_]{3,}")) {
-//          if (!firstHrSeen) {
-//            firstHrSeen = true;
-//            document.add(new LineSeparator(0noe .5f, 100f, BaseColor.GRAY, Element.ALIGN_CENTER, -2f));
-//            document.add(Chunk.NEWLINE);
-//          } else {
-//            needNewPage = true;
-//          }
           needNewPage = true;
+          pendingNewlines = 0;
           continue;
         }
 
         // Always detect image marker lines so they are never rendered as raw text.
         String imageDesc = extractImageDescription(trimmed);
         if (imageDesc != null) {
-          if (needNewPage) {
-            document.newPage();
-            needNewPage = false;
-          }
+          boolean imageAdded = false;
           if (enableImage) {
-            addStorybookImage(document, imageDesc);
-          } else {
-            // Show description as italic caption so no blank space is left
-            Paragraph descPara = buildStyledParagraph("[ " + imageDesc + " ]", italicFont, italicFont, italicFont, italicFont);
-            descPara.setSpacingAfter(4);
-            document.add(descPara);
+            if (needNewPage) { document.newPage(); needNewPage = false; pendingNewlines = 0; }
+            imageAdded = addStorybookImage(document, imageDesc, pendingNewlines);
           }
+          // Whether disabled or generation failed, discard surrounding blank lines
+          pendingNewlines = 0;
+          if (!imageAdded) imageSkipped = true;
           continue;
         }
 
@@ -129,6 +124,13 @@ public class PdfGeneratorService {
         if (needNewPage) {
           document.newPage();
           needNewPage = false;
+          pendingNewlines = 0;
+        }
+
+        // Flush at most one blank line between paragraphs
+        if (pendingNewlines > 0) {
+          document.add(Chunk.NEWLINE);
+          pendingNewlines = 0;
         }
 
         // Headings
@@ -181,24 +183,27 @@ public class PdfGeneratorService {
   }
 
   /**
-   * Generates an image for the given description and adds it centered on the current PDF page.
-   * If generation fails, silently skips.
+   * Generates an image and adds it to the document. Leading blank lines are only added
+   * when the image is actually available, so callers can discard them when generation fails.
+   * Returns true if the image was successfully embedded.
    */
-  private void addStorybookImage(Document document, String description) {
+  private boolean addStorybookImage(Document document, String description, int leadingNewlines) {
     try {
       byte[] imageBytes = imageGenerationService.generateStorybookImage(description);
-      if (imageBytes == null) return;
+      if (imageBytes == null) return false;
+
+      for (int n = 0; n < leadingNewlines; n++) document.add(Chunk.NEWLINE);
 
       Image img = Image.getInstance(imageBytes);
       img.setAlignment(Element.ALIGN_CENTER);
-      // Scale to fit page width (minus margins) with a max height of 300pt
-      float maxWidth  = document.getPageSize().getWidth()  - document.leftMargin() - document.rightMargin();
-      float maxHeight = 300f;
-      img.scaleToFit(maxWidth, maxHeight);
+      float maxWidth = document.getPageSize().getWidth() - document.leftMargin() - document.rightMargin();
+      img.scaleToFit(maxWidth, 300f);
       document.add(img);
       document.add(Chunk.NEWLINE);
+      return true;
     } catch (Exception e) {
       LOGGER.warn("Failed to embed image in PDF: {}", e.getMessage());
+      return false;
     }
   }
 
