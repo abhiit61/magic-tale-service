@@ -9,6 +9,7 @@ import org.springframework.ai.image.ImagePrompt;
 import org.springframework.ai.image.ImageResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -24,12 +25,15 @@ public class ImageGenerationService {
 
   private final ImageModel imageModel;
   private final ImageCacheRepository imageCacheRepository;
+  private final RestTemplate restTemplate;
 
   @Autowired
   public ImageGenerationService(@Autowired(required = false) ImageModel imageModel,
-                                ImageCacheRepository imageCacheRepository) {
+                                ImageCacheRepository imageCacheRepository,
+                                RestTemplate restTemplate) {
     this.imageModel = imageModel;
     this.imageCacheRepository = imageCacheRepository;
+    this.restTemplate = restTemplate;
   }
 
   /**
@@ -58,14 +62,9 @@ public class ImageGenerationService {
           "soft watercolor look, suitable for young children: " + description;
 
       ImageResponse response = imageModel.call(new ImagePrompt(prompt));
-      String b64 = response.getResult().getOutput().getB64Json();
+      byte[] imageBytes = extractImageBytes(response, hash);
 
-      if (b64 == null || b64.isBlank()) {
-        LOGGER.warn("Image generation returned empty response for hash {}", hash);
-        return null;
-      }
-
-      byte[] imageBytes = Base64.getDecoder().decode(b64);
+      if (imageBytes == null) return null;
 
       // Persist to cache
       ImageCache entry = new ImageCache();
@@ -84,13 +83,28 @@ public class ImageGenerationService {
     }
   }
 
+  private byte[] extractImageBytes(ImageResponse response, String hash) {
+    String b64 = response.getResult().getOutput().getB64Json();
+    if (b64 != null && !b64.isBlank()) {
+      return Base64.getDecoder().decode(b64);
+    }
+
+    String url = response.getResult().getOutput().getUrl();
+    if (url != null && !url.isBlank()) {
+      LOGGER.info("Downloading image from URL for hash {}", hash);
+      return restTemplate.getForObject(url, byte[].class);
+    }
+
+    LOGGER.warn("Image generation returned neither b64 nor URL for hash {}", hash);
+    return null;
+  }
+
   private String sha256(String input) {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       byte[] bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
       return HexFormat.of().formatHex(bytes);
     } catch (Exception e) {
-      // Fallback: use hashCode as hex (extremely unlikely to hit)
       return Integer.toHexString(input.hashCode());
     }
   }
