@@ -6,11 +6,14 @@ import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.google.genai.GoogleGenAiChatModel;
+import org.springframework.ai.image.ImageModel;
 import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiImageModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -22,6 +25,9 @@ public class StoryBookAppConfig implements WebMvcConfigurer {
 
   @Value("${chat.model}")
   private String chatModel;
+
+  @Value("${image.model}")
+  private String imageModelConfig;
 
   @Bean
   public RestTemplate restTemplate() {
@@ -55,6 +61,27 @@ public class StoryBookAppConfig implements WebMvcConfigurer {
     };
 
     return ChatClient.create(selectedModel);
+  }
+
+  @Bean
+  @Primary
+  public ImageModel imageModel(@Autowired(required = false) OpenAiImageModel openAiImageModel) {
+    return switch (imageModelConfig.toLowerCase()) {
+      case "openai" -> {
+        if (openAiImageModel == null) {
+          LOGGER.warn("image.model=openai but OpenAiImageModel is not available — check OPENAI_API_KEY. Images will be skipped.");
+          yield null;
+        }
+        LOGGER.info("Using ImageModel: OpenAI (DALL-E 3)");
+        yield openAiImageModel;
+      }
+      case "none" -> {
+        LOGGER.info("Image generation disabled (image.model=none).");
+        yield null;
+      }
+      default -> throw new IllegalArgumentException(
+          "Unsupported image.model value: '" + imageModelConfig + "'. Supported values: openai, none");
+    };
   }
 
   @Override

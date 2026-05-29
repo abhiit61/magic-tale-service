@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.image.ImageModel;
 import org.springframework.ai.image.ImagePrompt;
 import org.springframework.ai.image.ImageResponse;
-import org.springframework.ai.openai.OpenAiImageOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -50,22 +49,15 @@ public class ImageGenerationService {
 
     // Cache miss — generate via AI
     if (imageModel == null) {
-      LOGGER.warn("ImageModel not available — skipping image generation. Ensure OPENAI_API_KEY is set.");
+      LOGGER.warn("ImageModel not available — skipping image generation. Set image.model=openai and ensure OPENAI_API_KEY is set.");
       return null;
     }
 
     try {
-      OpenAiImageOptions options = OpenAiImageOptions.builder()
-          .model("dall-e-3")
-          .width(1024)
-          .height(1024)
-          .responseFormat("b64_json")
-          .build();
-
       String prompt = "Children's storybook illustration, colorful cartoon style, warm friendly tones, " +
           "soft watercolor look, suitable for young children: " + description;
 
-      ImageResponse response = imageModel.call(new ImagePrompt(prompt, options));
+      ImageResponse response = imageModel.call(new ImagePrompt(prompt));
       String b64 = response.getResult().getOutput().getB64Json();
 
       if (b64 == null || b64.isBlank()) {
