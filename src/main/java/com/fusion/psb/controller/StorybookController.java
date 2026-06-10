@@ -55,7 +55,8 @@ public class StorybookController {
       @AuthenticationPrincipal User user,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "10") int size) {
-    return ResponseEntity.ok(storyService.getStories(user, page, size));
+    Page<StoryResponse> stories = storyService.getStories(user, page, size);
+    return ResponseEntity.ok(stories);
   }
 
   @GetMapping("/stories/{id}")

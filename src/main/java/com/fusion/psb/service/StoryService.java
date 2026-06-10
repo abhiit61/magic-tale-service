@@ -84,7 +84,7 @@ public class StoryService {
         StoryResponse r = new StoryResponse();
         r.setId(log.getId());
         r.setTitle(log.getName() + "'s " + log.getTheme() + " Story");
-        r.setChildName(log.getName());
+        r.setName(log.getName());
         r.setAge(log.getAge());
         r.setGender(log.getGender());
         r.setBodyTone(log.getBodyTone());
@@ -104,8 +104,8 @@ public class StoryService {
             User owner = userCache.get(log.getUserId());
             if (owner != null) {
                 r.setUserId(owner.getId());
-                r.setUserEmail(owner.getEmail());
-                r.setUserName(owner.getName());
+                r.setCreatedByEmail(owner.getEmail());
+                r.setCreatedByName(owner.getName());
             } else {
                 r.setUserId(log.getUserId());
             }

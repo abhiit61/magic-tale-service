@@ -1,14 +1,7 @@
 package com.fusion.psb.service;
 
-import com.itextpdf.text.BaseColor;
-import com.itextpdf.text.Chunk;
-import com.itextpdf.text.Document;
-import com.itextpdf.text.Element;
-import com.itextpdf.text.Font;
-import com.itextpdf.text.Image;
-import com.itextpdf.text.Paragraph;
-import com.itextpdf.text.pdf.BaseFont;
-import com.itextpdf.text.pdf.PdfWriter;
+import com.itextpdf.text.*;
+import com.itextpdf.text.pdf.*;
 import com.itextpdf.text.pdf.draw.LineSeparator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,13 +18,20 @@ public class PdfGeneratorService {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(PdfGeneratorService.class);
 
-  // Matches: [IMAGE: description]
   private static final Pattern IMAGE_TAG_PATTERN =
       Pattern.compile("^\\[IMAGE:\\s*(.+?)\\s*\\]$", Pattern.CASE_INSENSITIVE);
-
-  // Matches: **(Page N: Illustration - description)**
   private static final Pattern ILLUSTRATION_PATTERN =
       Pattern.compile("^\\*\\*\\(Page \\d+:\\s*Illustration\\s*-\\s*(.+)\\)\\*\\*$", Pattern.CASE_INSENSITIVE);
+
+  // Color palette
+  private static final BaseColor NAVY = new BaseColor(23,  37,  84);
+  private static final BaseColor GOLD = new BaseColor(202, 138,   4);
+  private static final BaseColor INK  = new BaseColor(30,  30,  46);
+
+  // Page margins — extra top/bottom headroom for header and footer bands
+  private static final float MH = 55f;
+  private static final float MT = 70f;
+  private static final float MB = 60f;
 
   private final ImageGenerationService imageGenerationService;
 
@@ -45,68 +45,59 @@ public class PdfGeneratorService {
 
   public byte[] createPDF(String name, String content, String language) {
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-    Document document = new Document();
+    Document document = new Document(PageSize.A4, MH, MH, MT, MB);
     try {
-      PdfWriter.getInstance(document, outputStream);
+      PdfWriter writer = PdfWriter.getInstance(document, outputStream);
+      writer.setPageEvent(new StorybookPageEvent(name));
       document.open();
 
-      Font titleFont, h1Font, h2Font, h3Font, bodyFont, boldFont, italicFont, boldItalicFont;
+      Font coverFont, h1Font, h2Font, h3Font, bodyFont, boldFont, italicFont, boldItalicFont;
       try {
-        BaseFont bfRegular = BaseFont.createFont(resolveRegularFontPath(language), BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
-        BaseFont bfBold    = BaseFont.createFont(resolveBoldFontPath(language),    BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
-        titleFont      = new Font(bfBold,    20, Font.NORMAL);
-        h1Font         = new Font(bfBold,    18, Font.NORMAL);
-        h2Font         = new Font(bfBold,    16, Font.NORMAL);
-        h3Font         = new Font(bfBold,    14, Font.NORMAL);
-        bodyFont       = new Font(bfRegular, 12, Font.NORMAL);
-        boldFont       = new Font(bfBold,    12, Font.NORMAL);
-        italicFont     = new Font(bfBold,    12, Font.NORMAL);
-        boldItalicFont = new Font(bfBold,    12, Font.NORMAL);
+        BaseFont bfReg  = BaseFont.createFont(resolveRegularFontPath(language), BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+        BaseFont bfBold = BaseFont.createFont(resolveBoldFontPath(language),    BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+        coverFont      = new Font(bfBold,  34, Font.NORMAL, BaseColor.WHITE);
+        h1Font         = new Font(bfBold,  24, Font.NORMAL, NAVY);
+        h2Font         = new Font(bfBold,  20, Font.NORMAL, NAVY);
+        h3Font         = new Font(bfBold,  17, Font.NORMAL, NAVY);
+        bodyFont       = new Font(bfReg,   17, Font.NORMAL, INK);
+        boldFont       = new Font(bfBold,  17, Font.NORMAL, INK);
+        italicFont     = new Font(bfBold,  17, Font.NORMAL, INK);
+        boldItalicFont = new Font(bfBold,  17, Font.NORMAL, INK);
       } catch (Exception e) {
-        LOGGER.warn("Unicode font not found for language '{}', falling back to Helvetica.", language);
-        titleFont      = new Font(Font.FontFamily.HELVETICA, 20, Font.BOLD);
-        h1Font         = new Font(Font.FontFamily.HELVETICA, 18, Font.BOLD);
-        h2Font         = new Font(Font.FontFamily.HELVETICA, 16, Font.BOLD);
-        h3Font         = new Font(Font.FontFamily.HELVETICA, 14, Font.BOLD);
-        bodyFont       = new Font(Font.FontFamily.HELVETICA, 12, Font.NORMAL);
-        boldFont       = new Font(Font.FontFamily.HELVETICA, 12, Font.BOLD);
-        italicFont     = new Font(Font.FontFamily.HELVETICA, 12, Font.ITALIC);
-        boldItalicFont = new Font(Font.FontFamily.HELVETICA, 12, Font.BOLDITALIC);
+        LOGGER.warn("Unicode font not found for '{}', falling back to Helvetica.", language);
+        coverFont      = new Font(Font.FontFamily.HELVETICA, 34, Font.BOLD,      BaseColor.WHITE);
+        h1Font         = new Font(Font.FontFamily.HELVETICA, 24, Font.BOLD,      NAVY);
+        h2Font         = new Font(Font.FontFamily.HELVETICA, 20, Font.BOLD,      NAVY);
+        h3Font         = new Font(Font.FontFamily.HELVETICA, 17, Font.BOLD,      NAVY);
+        bodyFont       = new Font(Font.FontFamily.HELVETICA, 17, Font.NORMAL,    INK);
+        boldFont       = new Font(Font.FontFamily.HELVETICA, 17, Font.BOLD,      INK);
+        italicFont     = new Font(Font.FontFamily.HELVETICA, 17, Font.ITALIC,    INK);
+        boldItalicFont = new Font(Font.FontFamily.HELVETICA, 17, Font.BOLDITALIC,INK);
       }
 
-      // Cover page title
-      Paragraph title = new Paragraph("Personalized Storybook for " + name, titleFont);
-      title.setSpacingAfter(6);
-      document.add(title);
-      document.add(new LineSeparator(1f, 100f, BaseColor.BLACK, Element.ALIGN_CENTER, -2f));
-      document.add(Chunk.NEWLINE);
+      addCoverPage(document, name, coverFont);
+      document.newPage();
 
-      // Parse content line-by-line.
-      // pendingNewlines buffers blank lines so they are only flushed when real content follows.
-      // This prevents white gaps when an image marker is skipped (disabled or generation failed).
-      boolean needNewPage = false;
-      int pendingNewlines = 0;
+      boolean needNewPage  = false;
+      int     pendingNewlines = 0;
       boolean imageSkipped = false;
 
       for (String line : content.split("\n")) {
         String trimmed = line.trim();
 
         if (trimmed.isEmpty()) {
-          // Swallow empty lines that immediately follow a skipped image marker
           if (!imageSkipped) pendingNewlines++;
           continue;
         }
 
         imageSkipped = false;
 
-        // "---" = page boundary marker
         if (trimmed.matches("[-*_]{3,}")) {
-          needNewPage = true;
+          needNewPage     = true;
           pendingNewlines = 0;
           continue;
         }
 
-        // Always detect image marker lines so they are never rendered as raw text.
         String imageDesc = extractImageDescription(trimmed);
         if (imageDesc != null) {
           boolean imageAdded = false;
@@ -114,60 +105,46 @@ public class PdfGeneratorService {
             if (needNewPage) { document.newPage(); needNewPage = false; pendingNewlines = 0; }
             imageAdded = addStorybookImage(document, imageDesc, pendingNewlines);
           }
-          // Whether disabled or generation failed, discard surrounding blank lines
           pendingNewlines = 0;
           if (!imageAdded) imageSkipped = true;
           continue;
         }
 
-        // Apply pending page break before regular content
-        if (needNewPage) {
-          document.newPage();
-          needNewPage = false;
-          pendingNewlines = 0;
-        }
+        if (needNewPage) { document.newPage(); needNewPage = false; pendingNewlines = 0; }
+        if (pendingNewlines > 0) { document.add(Chunk.NEWLINE); pendingNewlines = 0; }
 
-        // Flush at most one blank line between paragraphs
-        if (pendingNewlines > 0) {
-          document.add(Chunk.NEWLINE);
-          pendingNewlines = 0;
-        }
-
-        // Headings
         if (trimmed.startsWith("### ")) {
           Paragraph p = new Paragraph(stripInlineMarkdown(trimmed.substring(4)), h3Font);
-          p.setSpacingBefore(8);
-          p.setSpacingAfter(3);
+          p.setSpacingBefore(12); p.setSpacingAfter(6);
           document.add(p);
           continue;
         }
         if (trimmed.startsWith("## ")) {
           Paragraph p = new Paragraph(stripInlineMarkdown(trimmed.substring(3)), h2Font);
-          p.setSpacingBefore(10);
-          p.setSpacingAfter(4);
+          p.setSpacingBefore(14); p.setSpacingAfter(8);
           document.add(p);
+          document.add(new LineSeparator(1.5f, 60f, GOLD, Element.ALIGN_LEFT, -2f));
+          document.add(Chunk.NEWLINE);
           continue;
         }
         if (trimmed.startsWith("# ")) {
-          Paragraph p = new Paragraph(stripInlineMarkdown(trimmed.substring(2)), h1Font);
-          p.setSpacingBefore(12);
-          p.setSpacingAfter(5);
-          document.add(p);
+          addPageHeading(document, stripInlineMarkdown(trimmed.substring(2)), h1Font);
           continue;
         }
 
-        // Bullet points
         if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
           Paragraph p = buildStyledParagraph("• " + trimmed.substring(2), bodyFont, boldFont, italicFont, boldItalicFont);
-          p.setIndentationLeft(15);
-          p.setSpacingAfter(2);
+          p.setIndentationLeft(20);
+          p.setLeading(28f);
+          p.setSpacingAfter(8);
           document.add(p);
           continue;
         }
 
-        // Normal paragraph
         Paragraph p = buildStyledParagraph(trimmed, bodyFont, boldFont, italicFont, boldItalicFont);
-        p.setSpacingAfter(4);
+        p.setAlignment(Element.ALIGN_JUSTIFIED);
+        p.setLeading(30f);
+        p.setSpacingAfter(14);
         document.add(p);
       }
 
@@ -175,18 +152,58 @@ public class PdfGeneratorService {
       LOGGER.error("Error while creating PDF: ", e);
       throw new RuntimeException("Failed to generate the PDF. Please try again later.");
     } finally {
-      if (document.isOpen()) {
-        document.close();
-      }
+      if (document.isOpen()) document.close();
     }
     return outputStream.toByteArray();
   }
 
-  /**
-   * Generates an image and adds it to the document. Leading blank lines are only added
-   * when the image is actually available, so callers can discard them when generation fails.
-   * Returns true if the image was successfully embedded.
-   */
+  // ── Cover page ────────────────────────────────────────────────────────────
+
+  private void addCoverPage(Document document, String name, Font coverFont) throws DocumentException {
+    for (int i = 0; i < 6; i++) document.add(Chunk.NEWLINE);
+
+    // Navy title banner
+    PdfPTable banner = new PdfPTable(1);
+    banner.setWidthPercentage(100);
+    Paragraph titlePara = new Paragraph(name + "'s\nStorybook", coverFont);
+    titlePara.setAlignment(Element.ALIGN_CENTER);
+    titlePara.setLeading(46f);
+    PdfPCell titleCell = new PdfPCell();
+    titleCell.addElement(titlePara);
+    titleCell.setBackgroundColor(NAVY);
+    titleCell.setPadding(36f);
+    titleCell.setBorder(0);
+    titleCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+    banner.addCell(titleCell);
+    document.add(banner);
+
+    document.add(Chunk.NEWLINE);
+    document.add(new LineSeparator(4f, 55f, GOLD, Element.ALIGN_CENTER, 0));
+    document.add(Chunk.NEWLINE);
+
+    Font subtitleFont = new Font(Font.FontFamily.HELVETICA, 13, Font.ITALIC, NAVY);
+    Paragraph subtitle = new Paragraph("~ A Personalized Adventure ~", subtitleFont);
+    subtitle.setAlignment(Element.ALIGN_CENTER);
+    document.add(subtitle);
+
+    document.add(Chunk.NEWLINE);
+    document.add(new LineSeparator(4f, 55f, GOLD, Element.ALIGN_CENTER, 0));
+  }
+
+  // ── Page heading (# level) with gold underline ───────────────────────────
+
+  private void addPageHeading(Document document, String text, Font font) throws DocumentException {
+    Paragraph heading = new Paragraph(text, font);
+    heading.setAlignment(Element.ALIGN_CENTER);
+    heading.setSpacingBefore(6);
+    heading.setSpacingAfter(6);
+    document.add(heading);
+    document.add(new LineSeparator(2.5f, 85f, GOLD, Element.ALIGN_CENTER, -2f));
+    document.add(Chunk.NEWLINE);
+  }
+
+  // ── Image with gold frame ─────────────────────────────────────────────────
+
   private boolean addStorybookImage(Document document, String description, int leadingNewlines) {
     try {
       byte[] imageBytes = imageGenerationService.generateStorybookImage(description);
@@ -195,10 +212,21 @@ public class PdfGeneratorService {
       for (int n = 0; n < leadingNewlines; n++) document.add(Chunk.NEWLINE);
 
       Image img = Image.getInstance(imageBytes);
-      img.setAlignment(Element.ALIGN_CENTER);
       float maxWidth = document.getPageSize().getWidth() - document.leftMargin() - document.rightMargin();
-      img.scaleToFit(maxWidth, 300f);
-      document.add(img);
+      img.scaleToFit(maxWidth, 370f);
+      img.setAlignment(Element.ALIGN_CENTER);
+
+      // Gold border frame around the illustration
+      PdfPTable frame = new PdfPTable(1);
+      frame.setWidthPercentage(100);
+      PdfPCell cell = new PdfPCell();
+      cell.addElement(img);
+      cell.setBorderColor(GOLD);
+      cell.setBorderWidth(2.5f);
+      cell.setPadding(5f);
+      cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+      frame.addCell(cell);
+      document.add(frame);
       document.add(Chunk.NEWLINE);
       return true;
     } catch (Exception e) {
@@ -207,28 +235,68 @@ public class PdfGeneratorService {
     }
   }
 
-  /**
-   * Extracts the scene description from a supported image marker line.
-   * Supported formats:
-   *   [IMAGE: description]
-   *   **(Page N: Illustration - description)**
-   */
+  // ── Per-page header and footer ────────────────────────────────────────────
+
+  private static class StorybookPageEvent extends PdfPageEventHelper {
+
+    private final String storyName;
+
+    StorybookPageEvent(String storyName) {
+      this.storyName = storyName;
+    }
+
+    @Override
+    public void onEndPage(PdfWriter writer, Document document) {
+      if (writer.getPageNumber() == 1) return; // cover page has no header/footer
+
+      PdfContentByte cb  = writer.getDirectContent();
+      float pageW = document.getPageSize().getWidth();
+      float left  = document.leftMargin();
+      float right = pageW - document.rightMargin();
+
+      // ── header ──────────────────────────────────────────────────────────
+      cb.setColorStroke(GOLD);
+      cb.setLineWidth(1.5f);
+      cb.moveTo(left, document.top() + 22);
+      cb.lineTo(right, document.top() + 22);
+      cb.stroke();
+
+      ColumnText.showTextAligned(cb, Element.ALIGN_CENTER,
+          new Phrase(storyName + "'s Story",
+              new Font(Font.FontFamily.HELVETICA, 8, Font.ITALIC, NAVY)),
+          pageW / 2f, document.top() + 34, 0);
+
+      // ── footer ──────────────────────────────────────────────────────────
+      cb.setColorStroke(GOLD);
+      cb.setLineWidth(1f);
+      cb.moveTo(left, document.bottom() - 18);
+      cb.lineTo(right, document.bottom() - 18);
+      cb.stroke();
+
+      // page number minus cover page
+      ColumnText.showTextAligned(cb, Element.ALIGN_CENTER,
+          new Phrase("- " + (writer.getPageNumber() - 1) + " -",
+              new Font(Font.FontFamily.HELVETICA, 9, Font.NORMAL, NAVY)),
+          pageW / 2f, document.bottom() - 32, 0);
+    }
+  }
+
+  // ── Markdown helpers ──────────────────────────────────────────────────────
+
   private String extractImageDescription(String line) {
     Matcher m1 = IMAGE_TAG_PATTERN.matcher(line);
     if (m1.matches()) return m1.group(1).trim();
-
     Matcher m2 = ILLUSTRATION_PATTERN.matcher(line);
     if (m2.matches()) return m2.group(1).trim();
-
     return null;
   }
 
   private String stripInlineMarkdown(String text) {
     return text.replaceAll("\\*\\*\\*(.+?)\\*\\*\\*", "$1")
-               .replaceAll("\\*\\*(.+?)\\*\\*", "$1")
-               .replaceAll("\\*(.+?)\\*", "$1")
-               .replaceAll("_(.+?)_", "$1")
-               .replaceAll("`(.+?)`", "$1");
+               .replaceAll("\\*\\*(.+?)\\*\\*",       "$1")
+               .replaceAll("\\*(.+?)\\*",              "$1")
+               .replaceAll("_(.+?)_",                  "$1")
+               .replaceAll("`(.+?)`",                  "$1");
   }
 
   private Paragraph buildStyledParagraph(String text, Font normal, Font bold, Font italic, Font boldItalic) {
@@ -236,41 +304,27 @@ public class PdfGeneratorService {
     paragraph.setFont(normal);
     StringBuilder buffer = new StringBuilder();
     int i = 0;
-
     while (i < text.length()) {
       if (i + 2 < text.length() && text.startsWith("***", i)) {
         flushBuffer(paragraph, buffer, normal);
         int end = text.indexOf("***", i + 3);
-        if (end != -1) {
-          paragraph.add(new Chunk(text.substring(i + 3, end), boldItalic));
-          i = end + 3;
-        } else {
-          buffer.append(text.charAt(i++));
-        }
+        if (end != -1) { paragraph.add(new Chunk(text.substring(i + 3, end), boldItalic)); i = end + 3; }
+        else buffer.append(text.charAt(i++));
       } else if (i + 1 < text.length() && text.startsWith("**", i)) {
         flushBuffer(paragraph, buffer, normal);
         int end = text.indexOf("**", i + 2);
-        if (end != -1) {
-          paragraph.add(new Chunk(text.substring(i + 2, end), bold));
-          i = end + 2;
-        } else {
-          buffer.append(text.charAt(i++));
-        }
+        if (end != -1) { paragraph.add(new Chunk(text.substring(i + 2, end), bold)); i = end + 2; }
+        else buffer.append(text.charAt(i++));
       } else if (text.charAt(i) == '*' || text.charAt(i) == '_') {
         char marker = text.charAt(i);
         flushBuffer(paragraph, buffer, normal);
         int end = text.indexOf(marker, i + 1);
-        if (end != -1) {
-          paragraph.add(new Chunk(text.substring(i + 1, end), italic));
-          i = end + 1;
-        } else {
-          buffer.append(text.charAt(i++));
-        }
+        if (end != -1) { paragraph.add(new Chunk(text.substring(i + 1, end), italic)); i = end + 1; }
+        else buffer.append(text.charAt(i++));
       } else {
         buffer.append(text.charAt(i++));
       }
     }
-
     flushBuffer(paragraph, buffer, normal);
     return paragraph;
   }
@@ -281,6 +335,8 @@ public class PdfGeneratorService {
       buffer.setLength(0);
     }
   }
+
+  // ── Font resolution ───────────────────────────────────────────────────────
 
   private String resolveRegularFontPath(String language) {
     return switch (language.toLowerCase()) {
@@ -309,7 +365,7 @@ public class PdfGeneratorService {
       case "bengali"                     -> "/fonts/NotoSansBengali-Bold.ttf";
       case "gujarati"                    -> "/fonts/NotoSansGujarati-Bold.ttf";
       case "punjabi"                     -> "/fonts/NotoSansGurmukhi-Bold.ttf";
-      case "arabic", "urdu"             -> "/fonts/NotoSansArabic-Bold.ttf";
+      case "arabic", "urdu"              -> "/fonts/NotoSansArabic-Bold.ttf";
       case "chinese"                     -> "/fonts/NotoSansSC-Bold.ttf";
       case "japanese"                    -> "/fonts/NotoSansJP-Bold.ttf";
       default                            -> "/fonts/NotoSans-Bold.ttf";
