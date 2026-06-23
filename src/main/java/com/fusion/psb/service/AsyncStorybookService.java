@@ -19,14 +19,14 @@ public class AsyncStorybookService {
 
     private final StorybookAuditLogRepository auditLogRepository;
     private final PdfGeneratorService pdfGeneratorService;
-    private final ChatClient chatClient;
+    private final AIModelService aiModelService;
 
     public AsyncStorybookService(StorybookAuditLogRepository auditLogRepository,
                                  PdfGeneratorService pdfGeneratorService,
-                                 ChatClient chatClient) {
+                                 AIModelService aiModelService) {
         this.auditLogRepository = auditLogRepository;
         this.pdfGeneratorService = pdfGeneratorService;
-        this.chatClient = chatClient;
+        this.aiModelService = aiModelService;
     }
 
     @Async
@@ -97,11 +97,7 @@ public class AsyncStorybookService {
 
     private String callChatApi(String userPrompt, String systemPrompt) {
         try {
-            return chatClient.prompt()
-                    .system(systemPrompt)
-                    .user(userPrompt)
-                    .call()
-                    .content();
+            return aiModelService.getChatResponse(systemPrompt, userPrompt);
         } catch (Exception e) {
             LOGGER.error("Chat API error: {}", e.getMessage());
             throw new RuntimeException("AI generation failed: " + e.getMessage());

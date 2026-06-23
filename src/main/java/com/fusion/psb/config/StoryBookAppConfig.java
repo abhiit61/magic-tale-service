@@ -4,13 +4,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.google.genai.GoogleGenAiChatModel;
 import org.springframework.ai.image.ImageModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiImageModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -23,10 +23,10 @@ public class StoryBookAppConfig implements WebMvcConfigurer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(StoryBookAppConfig.class);
 
-  @Value("${chat.model}")
+  @Value("${chat.model:all}")
   private String chatModel;
 
-  @Value("${image.model}")
+  @Value("${image.model:all}")
   private String imageModelConfig;
 
   @Bean
@@ -35,32 +35,21 @@ public class StoryBookAppConfig implements WebMvcConfigurer {
   }
 
   @Bean
-  public ChatClient chatClient(
-      @Autowired(required = false) GoogleGenAiChatModel googleGenAiChatModel,
-      @Autowired(required = false) OpenAiChatModel openAiChatModel,
-      @Autowired(required = false) AnthropicChatModel anthropicChatModel) {
+  public ChatClient geminiChatClient(GoogleGenAiChatModel googleGenAiChatModel) {
+    LOGGER.info("Registering ChatClient: Gemini");
+    return ChatClient.create(googleGenAiChatModel);
+  }
 
-    ChatModel selectedModel = switch (chatModel.toLowerCase()) {
-      case "openai" -> {
-        if (openAiChatModel == null) throw new IllegalStateException("OpenAI model is not configured. Set spring.ai.openai.api-key.");
-        LOGGER.info("Using ChatModel: OpenAI");
-        yield openAiChatModel;
-      }
-      case "anthropic" -> {
-        if (anthropicChatModel == null) throw new IllegalStateException("Anthropic model is not configured. Set spring.ai.anthropic.api-key.");
-        LOGGER.info("Using ChatModel: Anthropic");
-        yield anthropicChatModel;
-      }
-      case "gemini" -> {
-        if (googleGenAiChatModel == null) throw new IllegalStateException("Gemini model is not configured. Set spring.ai.google.genai.api-key.");
-        LOGGER.info("Using ChatModel: Gemini");
-        yield googleGenAiChatModel;
-      }
-      default -> throw new IllegalArgumentException(
-          "Unsupported chat.model value: '" + chatModel + "'. Supported values: gemini, openai, anthropic");
-    };
+  @Bean
+  public ChatClient openaiChatClient(OpenAiChatModel openAiChatModel) {
+    LOGGER.info("Registering ChatClient: OpenAI");
+    return ChatClient.create(openAiChatModel);
+  }
 
-    return ChatClient.create(selectedModel);
+  @Bean
+  public ChatClient anthropicChatClient(AnthropicChatModel anthropicChatModel) {
+    LOGGER.info("Registering ChatClient: Anthropic");
+    return ChatClient.create(anthropicChatModel);
   }
 
   @Bean
@@ -79,12 +68,20 @@ public class StoryBookAppConfig implements WebMvcConfigurer {
         LOGGER.info("Using ImageModel: Leonardo AI (handled via LeonardoImageService)");
         yield null; // Leonardo uses its own REST client, not Spring AI ImageModel
       }
+      case "random", "all" -> {
+        if (openAiImageModel != null) {
+          LOGGER.info("Using ImageModel: random selection defaults to OpenAI primary image model.");
+          yield openAiImageModel;
+        }
+        LOGGER.info("Using ImageModel: Leonardo AI (handled via LeonardoImageService) — no OpenAI image bean available");
+        yield null;
+      }
       case "none" -> {
         LOGGER.info("Image generation disabled (image.model=none).");
         yield null;
       }
       default -> throw new IllegalArgumentException(
-          "Unsupported image.model value: '" + imageModelConfig + "'. Supported values: openai, leonardo, none");
+          "Unsupported image.model value: '" + imageModelConfig + "'. Supported values: openai, leonardo, none, random");
     };
   }
 
