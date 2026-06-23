@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: magictale-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-magictale}
+      MYSQL_USER: ${DB_USER:-magictale}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-magictale123}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+#    networks:
+#      - app-network
+
+  magictale-website:
+    build:
+      context: ../magic-tale-website
+      dockerfile: ../magic-tale-website/Dockerfile
+    container_name: magictale-website
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
+  magictale-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: magictale-service
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      # Database Configuration
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-magictale}
+      DB_USER: ${DB_USER:-magictale}
+      DB_PASSWORD: ${DB_PASSWORD:-magictale123}
+
+      # Core settings
+      PORT: 8080
+
+      # AI Model Configuration
+      CHAT_MODEL: ${CHAT_MODEL:-gemini}
+      IMAGE_MODEL: ${IMAGE_MODEL:-leonardo}
+
+      # Gemini API
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+
+      # OpenAI API
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+      # Anthropic API
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+
+      # Leonardo AI Image Generation
+      LEONARDO_API_KEY: ${LEONARDO_API_KEY}
+      LEONARDO_MODEL_ID: ${LEONARDO_MODEL_ID:-b24e16ff-06e3-43eb-8d33-4416c2d75876}
+      LEONARDO_WIDTH: ${LEONARDO_WIDTH:-512}
+      LEONARDO_HEIGHT: ${LEONARDO_HEIGHT:-512}
+      LEONARDO_ALCHEMY: ${LEONARDO_ALCHEMY:-false}
+      LEONARDO_NUM_INFERENCE_STEPS: ${LEONARDO_NUM_INFERENCE_STEPS:-10}
+      LEONARDO_ENHANCE_PROMPT: ${LEONARDO_ENHANCE_PROMPT:-false}
+      LEONARDO_HIGH_RESOLUTION: ${LEONARDO_HIGH_RESOLUTION:-false}
+
+      # Security
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:-ThisIsASecretKeyForJWTTokenGenerationMustBe32Chars!}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+
+      # Admin settings
+      ADMIN_AUDIT_PASSWORD: ${ADMIN_AUDIT_PASSWORD:-admin123}
+      ADMIN_AUDIT_ALLOWED_IP: ${ADMIN_AUDIT_ALLOWED_IP:-127.0.0.1}
+
+      # Application
+      GENERATE_PDF_IMAGE_ENABLE: ${GENERATE_PDF_IMAGE_ENABLE:-true}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:4200}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+    driver: local
+
+## Define the network and volume used above
+#networks:
+#  app-network:
+#    driver: bridge

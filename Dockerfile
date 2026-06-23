@@ -1,17 +1,23 @@
-# Step 1: Build stage using Maven and JDK 21
+# Stage 1: Build
 FROM maven:3.9.6-eclipse-temurin-21-alpine AS build
 WORKDIR /app
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
 COPY . .
-# We use 'mvn' directly here because the image already has it configured
 RUN mvn clean package -DskipTests
 
-# Step 2: Run stage
+# Stage 2: Runtime
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
+
+RUN apk add --no-cache curl
+
 COPY --from=build /app/target/*.jar app.jar
 
-# Render provides the PORT env var, we tell Spring Boot to use it
 ENV PORT=8080
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-Xmx512m", "-Dserver.port=${PORT}", "-jar", "app.jar"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/actuator/health || exit 1
+
+CMD ["sh", "-c", "java -Xmx512m -Dserver.port=${PORT} -jar app.jar"]

@@ -6,10 +6,10 @@ import org.springframework.scheduling.annotation.EnableAsync;
 
 @EnableAsync
 @SpringBootApplication
-public class PersonalisedStorybookCoreApplication {
+public class MagicTaleServiceApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(PersonalisedStorybookCoreApplication.class, args);
+		SpringApplication.run(MagicTaleServiceApplication.class, args);
 	}
 
 }

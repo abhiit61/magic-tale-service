@@ -19,7 +19,7 @@ public class ImageCache {
     private String description;
 
     @Lob
-    @Column(name = "image_data", nullable = false)
+    @Column(name = "image_data", nullable = false, columnDefinition = "LONGBLOB")
     private byte[] imageData;
 
     private LocalDateTime createdAt;

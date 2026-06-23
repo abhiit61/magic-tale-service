@@ -17,7 +17,7 @@ public class StorybookAuditLog {
     private StoryStatus status;
 
     @Lob
-    @Column(name = "pdf_data")
+    @Column(name = "pdf_data", columnDefinition = "LONGBLOB")
     private byte[] pdfData;
 
     private String name;

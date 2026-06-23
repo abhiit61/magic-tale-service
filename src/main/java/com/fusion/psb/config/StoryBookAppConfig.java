@@ -72,15 +72,19 @@ public class StoryBookAppConfig implements WebMvcConfigurer {
           LOGGER.warn("image.model=openai but OpenAiImageModel is not available — check OPENAI_API_KEY. Images will be skipped.");
           yield null;
         }
-        LOGGER.info("Using ImageModel: OpenAI (DALL-E 3)");
+        LOGGER.info("Using ImageModel: OpenAI (gpt-image-1)");
         yield openAiImageModel;
+      }
+      case "leonardo" -> {
+        LOGGER.info("Using ImageModel: Leonardo AI (handled via LeonardoImageService)");
+        yield null; // Leonardo uses its own REST client, not Spring AI ImageModel
       }
       case "none" -> {
         LOGGER.info("Image generation disabled (image.model=none).");
         yield null;
       }
       default -> throw new IllegalArgumentException(
-          "Unsupported image.model value: '" + imageModelConfig + "'. Supported values: openai, none");
+          "Unsupported image.model value: '" + imageModelConfig + "'. Supported values: openai, leonardo, none");
     };
   }
 

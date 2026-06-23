@@ -75,15 +75,32 @@ public class PdfGeneratorService {
         boldItalicFont = new Font(Font.FontFamily.HELVETICA, 17, Font.BOLDITALIC,INK);
       }
 
-      addCoverPage(document, name, coverFont);
-      document.newPage();
+      // Extract story title from the first # heading so it can go on the cover
+      String storyTitle = "";
+      boolean titleConsumed = false;
+      for (String line : content.split("\n")) {
+        String t = line.trim();
+        if (t.startsWith("# ")) {
+          storyTitle = stripInlineMarkdown(t.substring(2)).trim();
+          break;
+        }
+      }
 
-      boolean needNewPage  = false;
+      addCoverPage(document, name, storyTitle, coverFont);
+
+      boolean needNewPage  = true;  // first content block always opens a fresh page after the cover
       int     pendingNewlines = 0;
       boolean imageSkipped = false;
 
       for (String line : content.split("\n")) {
         String trimmed = line.trim();
+
+        // Skip the title heading — it is already rendered on the cover page
+        if (!titleConsumed && trimmed.startsWith("# ") &&
+                stripInlineMarkdown(trimmed.substring(2)).trim().equals(storyTitle)) {
+          titleConsumed = true;
+          continue;
+        }
 
         if (trimmed.isEmpty()) {
           if (!imageSkipped) pendingNewlines++;
@@ -159,21 +176,31 @@ public class PdfGeneratorService {
 
   // ── Cover page ────────────────────────────────────────────────────────────
 
-  private void addCoverPage(Document document, String name, Font coverFont) throws DocumentException {
+  private void addCoverPage(Document document, String name, String storyTitle, Font coverFont) throws DocumentException {
     for (int i = 0; i < 6; i++) document.add(Chunk.NEWLINE);
 
     // Navy title banner
     PdfPTable banner = new PdfPTable(1);
     banner.setWidthPercentage(100);
-    Paragraph titlePara = new Paragraph(name + "'s\nStorybook", coverFont);
-    titlePara.setAlignment(Element.ALIGN_CENTER);
-    titlePara.setLeading(46f);
     PdfPCell titleCell = new PdfPCell();
-    titleCell.addElement(titlePara);
     titleCell.setBackgroundColor(NAVY);
     titleCell.setPadding(36f);
     titleCell.setBorder(0);
     titleCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+
+    Paragraph namePara = new Paragraph(name + "'s\nStorybook", coverFont);
+    namePara.setAlignment(Element.ALIGN_CENTER);
+    namePara.setLeading(46f);
+    titleCell.addElement(namePara);
+
+    if (storyTitle != null && !storyTitle.isBlank()) {
+      Font storyTitleFont = new Font(Font.FontFamily.HELVETICA, 16, Font.ITALIC, GOLD);
+      Paragraph storyTitlePara = new Paragraph(storyTitle, storyTitleFont);
+      storyTitlePara.setAlignment(Element.ALIGN_CENTER);
+      storyTitlePara.setSpacingBefore(18f);
+      titleCell.addElement(storyTitlePara);
+    }
+
     banner.addCell(titleCell);
     document.add(banner);
 

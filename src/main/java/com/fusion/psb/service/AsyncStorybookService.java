@@ -73,7 +73,9 @@ public class AsyncStorybookService {
 
     private String buildSystemPrompt(String language) {
         return "You are a story creator who creates personalized storybooks for children. "
-                + "Generate a story across 3 to 4 pages. Keep each page short and use simple vocabulary suitable for the child's age. "
+                + "Begin your response with the story title on its own line using EXACTLY this format: # <Story Title> "
+                + "(for example: # The Brave Little Fox and the Magic River). "
+                + "After the title, generate a story across 3 to 4 pages. Keep each page short and use simple vocabulary suitable for the child's age. "
                 + "One page will be divided between text and image, 50% text and 50% image. "
                 + "For EACH story page you MUST include an image description on its own line using EXACTLY this format: [IMAGE: <detailed visual scene description>]. "
                 + "Image descriptions MUST always be written in English (even if the story language is different), because they are used to generate illustrations. "
