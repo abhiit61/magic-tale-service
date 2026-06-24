@@ -51,6 +51,8 @@ public class AIModelService {
   }
 
   public String getChatResponse(String systemPrompt, String userPrompt) {
+    LOGGER.info("getChatResponse...");
+
     List<String> availableModels = breakers.entrySet().stream()
         .filter(entry -> isModelAllowed(entry.getKey()))
         .filter(entry -> entry.getValue().getState() == CircuitBreaker.State.CLOSED)
@@ -70,7 +72,7 @@ public class AIModelService {
               () -> callAIModel(selectedModel, systemPrompt, userPrompt))
           .get();
     } catch (Exception e) {
-      LOGGER.error("Error calling AI model {}: {}", selectedModel, e.getMessage(), e);
+      LOGGER.error("Error calling AI model {}: {}", selectedModel, e.getMessage());
       throw new RuntimeException("AI generation failed: " + e.getMessage(), e);
     }
   }

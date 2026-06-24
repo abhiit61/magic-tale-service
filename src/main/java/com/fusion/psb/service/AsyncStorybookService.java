@@ -4,9 +4,10 @@ import com.fusion.psb.dto.StorybookRequest;
 import com.fusion.psb.entity.StorybookAuditLog;
 import com.fusion.psb.entity.StoryStatus;
 import com.fusion.psb.repository.StorybookAuditLogRepository;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -20,17 +21,21 @@ public class AsyncStorybookService {
     private final StorybookAuditLogRepository auditLogRepository;
     private final PdfGeneratorService pdfGeneratorService;
     private final AIModelService aiModelService;
+    private final Retry retry;
 
     public AsyncStorybookService(StorybookAuditLogRepository auditLogRepository,
                                  PdfGeneratorService pdfGeneratorService,
-                                 AIModelService aiModelService) {
+                                 AIModelService aiModelService, RetryRegistry retryRegistry) {
         this.auditLogRepository = auditLogRepository;
         this.pdfGeneratorService = pdfGeneratorService;
         this.aiModelService = aiModelService;
+        this.retry = retryRegistry.retry("chatApiRetry");
     }
 
     @Async
     public void generateAsync(Long logId, StorybookRequest request, String language) {
+        LOGGER.info("generateAsync start : {}", Thread.currentThread());
+
         StorybookAuditLog log = auditLogRepository.findById(logId).orElseThrow();
 
         try {
@@ -69,6 +74,7 @@ public class AsyncStorybookService {
         }
 
         auditLogRepository.save(log);
+        LOGGER.info("generateAsync end : {}", Thread.currentThread());
     }
 
     private String buildSystemPrompt(String language) {
@@ -97,7 +103,9 @@ public class AsyncStorybookService {
 
     private String callChatApi(String userPrompt, String systemPrompt) {
         try {
-            return aiModelService.getChatResponse(systemPrompt, userPrompt);
+            return Retry.decorateSupplier(retry,
+                    () -> aiModelService.getChatResponse(systemPrompt, userPrompt))
+                .get();
         } catch (Exception e) {
             LOGGER.error("Chat API error: {}", e.getMessage());
             throw new RuntimeException("AI generation failed: " + e.getMessage());

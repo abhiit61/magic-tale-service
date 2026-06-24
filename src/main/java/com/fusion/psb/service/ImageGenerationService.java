@@ -4,6 +4,8 @@ import com.fusion.psb.entity.ImageCache;
 import com.fusion.psb.repository.ImageCacheRepository;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.image.ImageModel;
@@ -37,6 +39,7 @@ public class ImageGenerationService {
   private final CircuitBreaker openaiImageBreaker;
   private final CircuitBreaker leonardoBreaker;
   private final Random random = new Random();
+  private final Retry retry;
 
   @Autowired
   public ImageGenerationService(@Autowired(required = false) ImageModel imageModel,
@@ -44,7 +47,8 @@ public class ImageGenerationService {
                                 ImageCacheRepository imageCacheRepository,
                                 RestTemplate restTemplate,
                                 CircuitBreakerRegistry circuitBreakerRegistry,
-                                @Value("${image.model}") String imageModelConfig) {
+                                @Value("${image.model}") String imageModelConfig,
+      RetryRegistry retryRegistry) {
     this.imageModel           = imageModel;
     this.leonardoImageService = leonardoImageService;
     this.imageCacheRepository = imageCacheRepository;
@@ -52,9 +56,11 @@ public class ImageGenerationService {
     this.imageModelConfig     = imageModelConfig.toLowerCase();
     this.openaiImageBreaker = circuitBreakerRegistry.circuitBreaker("openai-image");
     this.leonardoBreaker = circuitBreakerRegistry.circuitBreaker("leonardo");
+    this.retry = retryRegistry.retry("imageApiRetry");
   }
 
   public byte[] generateStorybookImage(String description) {
+    LOGGER.info("generateStorybookImage... description='{}'", description);
     String hash = sha256(description);
 
     // Cache lookup — shared across all providers
@@ -86,16 +92,8 @@ public class ImageGenerationService {
       throw new RuntimeException("All image models are unavailable. Please try again later.");
     }
 
-    CircuitBreaker selectedBreaker = availableModels.get(random.nextInt(availableModels.size()));
-
-    byte[] imageBytes;
-    try {
-      imageBytes = CircuitBreaker.decorateSupplier(selectedBreaker,
-              () -> callImageModel(selectedBreaker.getName(), prompt, hash)).get();
-    } catch (Exception e) {
-      LOGGER.error("Error generating image with model {}: {}", selectedBreaker.getName(), e.getMessage(), e);
-      throw new RuntimeException("Image generation failed: " + e.getMessage(), e);
-    }
+    byte[] imageBytes = Retry.decorateSupplier(retry, () ->
+        generateWithRetry(availableModels, prompt, hash)).get();
 
     if (imageBytes != null) {
       ImageCache entry = new ImageCache();
@@ -104,14 +102,27 @@ public class ImageGenerationService {
       entry.setImageData(imageBytes);
       entry.setCreatedAt(LocalDateTime.now());
       imageCacheRepository.save(entry);
-      LOGGER.info("Image generated and cached — provider={}, hash={}", selectedBreaker.getName(), hash);
+      LOGGER.info("Image generated and cached — , hash={}", hash);
     }
 
     return imageBytes;
   }
 
+  private byte[] generateWithRetry(List<CircuitBreaker> availableModels, String prompt, String hash) {
+    CircuitBreaker selectedBreaker = availableModels.get(random.nextInt(availableModels.size()));
+    byte[] imageBytes;
+    try {
+      imageBytes = CircuitBreaker.decorateSupplier(selectedBreaker,
+          () -> callImageModel(selectedBreaker.getName(), prompt, hash)).get();
+    } catch (Exception e) {
+      LOGGER.error("Error generating image with model {}: {}", selectedBreaker.getName(), e.getMessage());
+      throw new RuntimeException("Image generation failed: " + e.getMessage(), e);
+    }
+    return imageBytes;
+  }
+
   private byte[] callImageModel(String modelName, String prompt, String hash) {
-    LOGGER.info("Generating image with model: {}", modelName);
+    LOGGER.info("Generating image with model: {} {}", modelName, hash);
     byte[] imageBytes = switch (modelName) {
       case "openai-image" -> generateViaOpenAi(prompt, hash);
       case "leonardo" -> leonardoImageService.generateImage(prompt);

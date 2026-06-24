@@ -166,7 +166,7 @@ public class PdfGeneratorService {
       }
 
     } catch (Exception e) {
-      LOGGER.error("Error while creating PDF: ", e);
+      LOGGER.error("Error while creating PDF: ", e.getMessage());
       throw new RuntimeException("Failed to generate the PDF. Please try again later.");
     } finally {
       if (document.isOpen()) document.close();
