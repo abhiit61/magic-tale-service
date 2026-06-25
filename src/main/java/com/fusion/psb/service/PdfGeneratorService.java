@@ -6,10 +6,16 @@ import com.itextpdf.text.pdf.draw.LineSeparator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,13 +40,16 @@ public class PdfGeneratorService {
   private static final float MB = 60f;
 
   private final ImageGenerationService imageGenerationService;
+  private final Executor imageTaskExecutor;
 
   @Value("${generate.pdf.image.enable}")
   private boolean enableImage;
 
   @Autowired
-  public PdfGeneratorService(ImageGenerationService imageGenerationService) {
+  public PdfGeneratorService(ImageGenerationService imageGenerationService,
+                             @Qualifier("imageGenerationTaskExecutor") Executor imageTaskExecutor) {
     this.imageGenerationService = imageGenerationService;
+    this.imageTaskExecutor = imageTaskExecutor;
   }
 
   public byte[] createPDF(String name, String content, String language) {
@@ -88,6 +97,7 @@ public class PdfGeneratorService {
 
       addCoverPage(document, name, storyTitle, coverFont);
 
+      Map<String, CompletableFuture<byte[]>> imageFutures = initializeImageFutures(content);
       boolean needNewPage  = true;  // first content block always opens a fresh page after the cover
       int     pendingNewlines = 0;
       boolean imageSkipped = false;
@@ -120,7 +130,8 @@ public class PdfGeneratorService {
           boolean imageAdded = false;
           if (enableImage) {
             if (needNewPage) { document.newPage(); needNewPage = false; pendingNewlines = 0; }
-            imageAdded = addStorybookImage(document, imageDesc, pendingNewlines);
+            byte[] imageBytes = resolveImageBytes(imageDesc, imageFutures);
+            imageAdded = addStorybookImage(document, imageBytes, pendingNewlines);
           }
           pendingNewlines = 0;
           if (!imageAdded) imageSkipped = true;
@@ -231,10 +242,11 @@ public class PdfGeneratorService {
 
   // ── Image with gold frame ─────────────────────────────────────────────────
 
-  private boolean addStorybookImage(Document document, String description, int leadingNewlines) {
+  private boolean addStorybookImage(Document document, byte[] imageBytes, int leadingNewlines) {
     try {
-      byte[] imageBytes = imageGenerationService.generateStorybookImage(description);
-      if (imageBytes == null) return false;
+      if (imageBytes == null || imageBytes.length == 0) {
+        return false;
+      }
 
       for (int n = 0; n < leadingNewlines; n++) document.add(Chunk.NEWLINE);
 
@@ -324,6 +336,41 @@ public class PdfGeneratorService {
                .replaceAll("\\*(.+?)\\*",              "$1")
                .replaceAll("_(.+?)_",                  "$1")
                .replaceAll("`(.+?)`",                  "$1");
+  }
+
+  private Map<String, CompletableFuture<byte[]>> initializeImageFutures(String content) {
+    if (!enableImage) {
+      return Map.of();
+    }
+    Map<String, CompletableFuture<byte[]>> futures = new LinkedHashMap<>();
+    for (String line : content.split("\n")) {
+      String trimmed = line.trim();
+      String description = extractImageDescription(trimmed);
+      if (description != null && !futures.containsKey(description)) {
+        futures.put(description, CompletableFuture.supplyAsync(() -> {
+          try {
+            return imageGenerationService.generateStorybookImage(description);
+          } catch (Exception e) {
+            LOGGER.warn("Parallel image generation failed for '{}': {}", ImageGenerationService.sha256(description), e.getMessage());
+            return null;
+          }
+        }, imageTaskExecutor));
+      }
+    }
+    return futures;
+  }
+
+  private byte[] resolveImageBytes(String description, Map<String, CompletableFuture<byte[]>> imageFutures) {
+    CompletableFuture<byte[]> future = imageFutures.get(description);
+    if (future == null) {
+      return null;
+    }
+    try {
+      return future.get(90, TimeUnit.SECONDS);
+    } catch (Exception e) {
+      LOGGER.warn("Timed out or failed to retrieve generated image for '{}': {}", description, e.getMessage());
+      return null;
+    }
   }
 
   private Paragraph buildStyledParagraph(String text, Font normal, Font bold, Font italic, Font boldItalic) {
