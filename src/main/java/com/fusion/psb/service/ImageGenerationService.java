@@ -38,6 +38,7 @@ public class ImageGenerationService {
   private final String imageModelConfig;
   private final CircuitBreaker openaiImageBreaker;
   private final CircuitBreaker leonardoBreaker;
+  private final CircuitBreaker huggingFaceBreaker;
   private final Retry retry;
 
   @Autowired
@@ -53,6 +54,7 @@ public class ImageGenerationService {
     this.imageModelConfig     = imageModelConfig.toLowerCase();
     this.openaiImageBreaker = circuitBreakerRegistry.circuitBreaker("openai-image");
     this.leonardoBreaker = circuitBreakerRegistry.circuitBreaker("leonardo");
+    this.huggingFaceBreaker = circuitBreakerRegistry.circuitBreaker("huggingface-image");
     this.retry = retryRegistry.retry("imageApiRetry");
   }
 
@@ -72,14 +74,20 @@ public class ImageGenerationService {
     List<String> allowedModelNames = switch (imageModelConfig) {
       case "openai" -> List.of("openai-image");
       case "leonardo" -> List.of("leonardo");
-      case "random", "all" -> List.of("openai-image", "leonardo");
+      case "huggingface" -> List.of("huggingface-image");
+      case "random", "all" -> List.of("openai-image", "leonardo", "huggingface-image");
       default -> throw new IllegalArgumentException(
           "Unsupported image.model value: '" + imageModelConfig + "'. Supported values: openai, leonardo, none, random");
     };
 
     List<CircuitBreaker> availableModels = new ArrayList<>();
     for (String provider : allowedModelNames) {
-      CircuitBreaker breaker = provider.equals("openai-image") ? openaiImageBreaker : leonardoBreaker;
+      CircuitBreaker breaker = switch (provider) {
+        case "openai-image" -> openaiImageBreaker;
+        case "leonardo" -> leonardoBreaker;
+        case "huggingface-image" -> huggingFaceBreaker;
+        default -> throw new IllegalArgumentException("Unsupported image provider: " + provider);
+      };
       if (breaker.getState() == CircuitBreaker.State.CLOSED && isProviderAvailable(provider)) {
         availableModels.add(breaker);
       }

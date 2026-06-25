@@ -20,6 +20,7 @@ public class AIModelController {
   private final CircuitBreaker openaiBreaker;
   private final CircuitBreaker openaiImageBreaker;
   private final CircuitBreaker leonardoBreaker;
+  private final CircuitBreaker huggingFaceImageBreaker;
 
   public AIModelController(CircuitBreakerRegistry circuitBreakerRegistry) {
     this.geminiBreaker = circuitBreakerRegistry.circuitBreaker("gemini");
@@ -27,6 +28,7 @@ public class AIModelController {
     this.openaiBreaker = circuitBreakerRegistry.circuitBreaker("openai");
     this.openaiImageBreaker = circuitBreakerRegistry.circuitBreaker("openai-image");
     this.leonardoBreaker = circuitBreakerRegistry.circuitBreaker("leonardo");
+    this.huggingFaceImageBreaker = circuitBreakerRegistry.circuitBreaker("huggingface-image");
   }
 
   @GetMapping("/chat/availability")
@@ -46,6 +48,7 @@ public class AIModelController {
 
     modelAvailability.put("OpenAI Image", getAvailability(openaiImageBreaker));
     modelAvailability.put("LEONARDO.AI", getAvailability(leonardoBreaker));
+    modelAvailability.put("Hugging Face", getAvailability(huggingFaceImageBreaker));
 
     return modelAvailability;
   }

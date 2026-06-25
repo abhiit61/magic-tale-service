@@ -1,9 +1,10 @@
 package com.fusion.psb.config;
 
+import com.fusion.psb.imagemodel.HuggingFaceImageModel;
 import com.fusion.psb.service.LeonardoImageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.fusion.psb.service.LeonardoImageModel;
+import com.fusion.psb.imagemodel.LeonardoImageModel;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.google.genai.GoogleGenAiChatModel;
@@ -76,6 +77,13 @@ public class StoryBookAppConfig implements WebMvcConfigurer {
   public ImageModel leonardoImageModel(LeonardoImageService leonardoImageService) {
     LOGGER.info("Registering ImageModel: Leonardo AI");
     return new LeonardoImageModel(leonardoImageService);
+  }
+
+  @Bean(name = "huggingface-image")
+  public ImageModel huggingFaceImageModel(
+      @Value("${huggingface.api-key}") String apiKey,
+      @Value("${huggingface.model}") String model) {
+    return new HuggingFaceImageModel(apiKey, model);
   }
 
   @Override
