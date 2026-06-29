@@ -26,19 +26,22 @@ services:
   magictale-website:
     image: abhishekatfusion/magictale-website:latest
     container_name: magictale-website
-    ports:
-      - "8083:80" # Maps host port 8083 to internal container web server port 80
+    #ports:
+    #  - "8083:80" # Maps host port 8083 to internal container web server port 80
     restart: unless-stopped
     networks:
       - app-network
       - traefik-public # Allows Traefik to reach this container
     labels:
       - "traefik.enable=true"
-      # Route for the frontend (e.g., magictale.local)
-      - "traefik.http.routers.magictale-website.rule=Host(`magictale.local`)"
-      - "traefik.http.routers.magictale-website.entrypoints=web" # Change to 'websecure' if using SSL/HTTPS
-      # Tells Traefik which port Nginx/Apache listens to inside this container
+      - "traefik.http.routers.magictale-website.entrypoints=https" # Change to 'http' if not using SSL/HTTPS
       - "traefik.http.services.magictale-website.loadbalancer.server.port=80"
+      - "traefik.http.routers.magictale-website-http.middlewares=https-redirect"
+      - "traefik.http.routers.magictale-website-https.entrypoints=https"
+      - "traefik.http.routers.magictale-website-https.tls=true"
+      - "traefik.http.routers.magictale-website-https.tls.certresolver=le"
+      - "traefik.http.routers.magictale-website-http.rule=Host(`magictale.fusionsofttech.co.in`)"
+      - "traefik.http.routers.magictale-website-https.rule=Host(`magictale.fusionsofttech.co.in`)"
 
   magictale-service:
     # REPLACE with your actual image path after pushing to Docker Hub/Registry
@@ -47,8 +50,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-    ports:
-      - "8084:8084"
+    #ports:
+    #  - "8084:80"
     environment:
       # Database Configuration
       DB_HOST: mysql
@@ -110,11 +113,14 @@ services:
       - traefik-public # Allows Traefik to reach this container
     labels:
       - "traefik.enable=true"
-      # Route for the backend API (e.g., api.magictale.local)
-      - "traefik.http.routers.magictale-service.rule=Host(`api.magictale.local`)"
-      - "traefik.http.routers.magictale-service.entrypoints=web" # Change to 'websecure' if using SSL/HTTPS
-      # Tells Traefik which port your Spring Boot app listens to internally
+      - "traefik.http.routers.magictale-service.entrypoints=https" # Change to 'http' if not using SSL/HTTPS
       - "traefik.http.services.magictale-service.loadbalancer.server.port=8084"
+      - "traefik.http.routers.magictale-service-http.middlewares=https-redirect"
+      - "traefik.http.routers.magictale-service-https.entrypoints=https"
+      - "traefik.http.routers.magictale-service-https.tls=true"
+      - "traefik.http.routers.magictale-service-https.tls.certresolver=le"
+      - "traefik.http.routers.magictale-service-http.rule=Host(`api.magictale.fusionsofttech.co.in`)"
+      - "traefik.http.routers.magictale-service-https.rule=Host(`api.magictale.fusionsofttech.co.in`)"
 
 volumes:
   mysql-data:
